@@ -1,0 +1,46 @@
+{
+  "n_estimators": [
+    "INTEGER",
+    "300"
+  ],
+  "min_child_weight": [
+    "INTEGER",
+    "1"
+  ],
+  "max_depth": [
+    "INTEGER",
+    "3"
+  ],
+  "gamma": [
+    "REAL",
+    "0.0"
+  ],
+  "subsample": [
+    "REAL",
+    "1.0"
+  ],
+  "colsample_bytree": [
+    "REAL",
+    "1.0"
+  ],
+  "model": [
+    "TEXT",
+    "gbdt"
+  ],
+  "dataset": [
+    "TEXT",
+    "ETTh1"
+  ],
+  "seq_len": [
+    "INTEGER",
+    "96"
+  ],
+  "pred_len": [
+    "INTEGER",
+    "96"
+  ],
+  "gpu": [
+    "INTEGER",
+    "0"
+  ]
+}

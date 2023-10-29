@@ -1,0 +1,16 @@
+# best_result.yml
+target:
+  - min: test_mse
+  - val_mse
+find_best:
+  - min_child_weight
+  - max_depth
+  - gamma
+  - seq_len
+group_by:
+  - dataset
+  - pred_len
+  - model
+  # - adapt_lr_level
+ignore:
+  - gpu
