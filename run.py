@@ -127,6 +127,11 @@ def main():
     parser.add_argument('--add_revin', action='store_true')
     parser.add_argument('--use_VT', action='store_true')
     parser.add_argument('--channel_strategy', default="CI_one", type=str, help='CF/CI_one/CI_indiv')
+    parser.add_argument('--add_x_mark', action='store_true')
+    parser.add_argument('--add_mean_var', action='store_true')
+    parser.add_argument('--add_patch_info', action='store_true')
+    parser.add_argument('--patch_len', type=int, default=16, help='patch_length')
+    parser.add_argument('--stride', type=int, default=8, help='patch_length')
     # XGBoost参数
     parser.add_argument('--n_estimators', type=int, default=300, help='[300]')  # 有早停的话不需要设置这一项了
     parser.add_argument('--min_child_weight', type=int, default=1, help='[1,2,3]')
@@ -188,11 +193,13 @@ def main():
             if args.run_train:
                 print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
                 if "gb" in args.model:
-                    val_mse, test_mse = exp.train(setting)
+                    val_mse, test_mse, test_mae = exp.train(setting)
                 else:
                     exp.train(setting)
                 
-                print(val_mse, test_mse)
+                print("val_mse:", val_mse)
+                print("test_mse:", test_mse)
+                print("test_mae:", test_mae)
                 
                 # result_dir = "./mse_results"
                 # if not os.path.exists(result_dir):

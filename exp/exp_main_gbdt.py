@@ -295,7 +295,7 @@ class Exp_Main_GBDT(Exp_Basic):
         data_x_new_total = {}
         phase_current = 0
         for flag in ["train", "vali", "test"]:
-            # feature 1
+            # * feature 1: +RevIN
             # 注意要把data_x变成tensor之后revin才能接受
             if flag == "train": revin_model = self.revin_train; data_x = data_x_train; data_x_mark = data_x_mark_train
             elif flag == "vali": revin_model = self.revin_vali; data_x = data_x_vali; data_x_mark = data_x_mark_vali
@@ -303,6 +303,7 @@ class Exp_Main_GBDT(Exp_Basic):
             
             x_revin = revin_model(torch.from_numpy(data_x), "norm")  # norm
             print("x_revin.shape:", x_revin.shape)
+            print("data_x.shape before revin: ", data_x.shape)
             print("x before revin: ", data_x)
             print("x after revin: ", x_revin.detach().numpy())
             print("revin_model.mean:", revin_model.mean.shape, revin_model.mean)
@@ -311,13 +312,71 @@ class Exp_Main_GBDT(Exp_Basic):
             print("revin_model.affine_bias:", revin_model.affine_bias.shape, revin_model.affine_bias)
             
             # data_x
-            # data_x_new = np.concatenate((data_x, x_revin.detach().numpy()), axis=1)
-            # data_x_new = np.concatenate((x_revin.detach().numpy(), data_x), axis=1)
-            data_x_new = x_revin.detach().numpy()
+            if self.args.add_revin:
+                # data_x_new = np.concatenate((data_x, x_revin.detach().numpy()), axis=1)
+                # data_x_new = np.concatenate((x_revin.detach().numpy(), data_x), axis=1)
+                data_x_new = x_revin.detach().numpy()
+            else:
+                data_x_new = data_x
+            print("data_x_new.shape", data_x_new.shape)
             
             
-            # feature 2
-            # periodic phase
+            # * feature 2: mean & variance
+            # mean 重要性占比很低
+            # 而variance和std占比很高，但是考虑这两者之后结果也变差了
+            # 沿着seq_len维度求和
+            mean = np.mean(data_x_new, axis=1)
+            var = np.var(data_x_new, axis=1)
+            std = np.std(data_x_new, axis=1)
+            mean = mean.reshape(mean.shape[0], 1)
+            var = var.reshape(var.shape[0], 1)
+            std = std.reshape(std.shape[0], 1)
+            print("mean.shape:", mean.shape)
+            
+            # data_x_new = np.concatenate((data_x_new, mean), axis=1)
+            # data_x_new = np.concatenate((data_x_new, var), axis=1)
+            # data_x_new = np.concatenate((data_x_new, std), axis=1)
+            
+            # * feature 3: Patching: mean & variance
+            seq_len = self.args.seq_len
+            patch_len = self.args.patch_len
+            stride = self.args.stride
+            patches = []
+            i = 0
+            while i+patch_len <= seq_len:
+                cur_data_x = data_x_new[:, i: i+patch_len]
+                patches.append(cur_data_x)
+                i += stride
+            
+            print("len(patches):", len(patches))
+            print("patches[0].shape:", patches[0].shape)
+            print("patches[-1].shape:", patches[-1].shape)
+            
+            
+            # 考虑到如果先加了全局的mean&variance，会导致特征数变多，从而导致patch时可能会将mean&variance也当作原始序列
+            # 所以feature 2和feature 3在后面一起加进去
+            # 先加feature 2
+            if self.args.add_mean_var:
+                data_x_new = np.concatenate((data_x_new, mean), axis=1)
+                data_x_new = np.concatenate((data_x_new, var), axis=1)
+                data_x_new = np.concatenate((data_x_new, std), axis=1)
+            # 再加feature 3
+            if self.args.add_patch_info:
+                for patch in patches:
+                    tmp_mean = np.mean(patch, axis=1)
+                    tmp_var = np.var(patch, axis=1)
+                    tmp_std = np.std(patch, axis=1)
+                    tmp_mean = tmp_mean.reshape(tmp_mean.shape[0], 1)
+                    tmp_var = tmp_var.reshape(tmp_var.shape[0], 1)
+                    tmp_std = tmp_std.reshape(tmp_std.shape[0], 1)
+                    data_x_new = np.concatenate((data_x_new, tmp_mean), axis=1)
+                    data_x_new = np.concatenate((data_x_new, tmp_var), axis=1)
+                    data_x_new = np.concatenate((data_x_new, tmp_std), axis=1)
+                
+            
+            # * feature 4: periodic phase
+            # * we use data_x_mark instead
+            # 这个新特征的重要性占比很高，但是结果却下降了
             # phase_info = np.zeros_like(data_x)
             # print("phase_info.shape:", phase_info.shape)
             # for i in range(phase_info.shape[0]):
@@ -331,10 +390,14 @@ class Exp_Main_GBDT(Exp_Basic):
             #     phase_info[i] = phase_array
             #     phase_current += 1
                 
-            
-            # data_x_mark_info = data_x_mark
-            # print("data_x_mark_info.shape", data_x_mark_info.shape)
-            # data_x_new = np.concatenate((data_x_new, data_x_mark_info), axis=1)
+            if self.args.add_x_mark:
+                if self.args.features == 'M' and self.args.channel_strategy == "CI_one":
+                    data_x_mark_info = [data_x_mark for _ in range(self.args.enc_in)]
+                    data_x_mark_info = np.vstack(data_x_mark_info)
+                else:
+                    data_x_mark_info = data_x_mark
+                print("data_x_mark_info.shape", data_x_mark_info.shape)
+                data_x_new = np.concatenate((data_x_new, data_x_mark_info), axis=1)
             
             
             # data_x_new = np.concatenate((data_x_new, phase_info), axis=1)
@@ -376,10 +439,15 @@ class Exp_Main_GBDT(Exp_Basic):
                 self.revin_vali = RevIN(self.args.enc_in)
                 self.revin_test = RevIN(self.args.enc_in)
             elif self.args.features == 'M' and self.args.channel_strategy == "CF":
-                # 如果channel-flatten，那么需要对后两位都做revin？
-                self.revin_train = RevIN(self.args.enc_in * self.args.seq_len)
-                self.revin_vali = RevIN(self.args.enc_in * self.args.seq_len)
-                self.revin_test = RevIN(self.args.enc_in * self.args.seq_len)
+                # # 如果channel-flatten，那么需要对后两位都做revin？
+                # self.revin_train = RevIN(self.args.enc_in * self.args.seq_len)
+                # self.revin_vali = RevIN(self.args.enc_in * self.args.seq_len)
+                # self.revin_test = RevIN(self.args.enc_in * self.args.seq_len)
+                
+                # 从结果来看，因为channel合并了，所以传给revin的num_features似乎还是为1
+                self.revin_train = RevIN(num_features=1)
+                self.revin_vali = RevIN(num_features=1)
+                self.revin_test = RevIN(num_features=1)
             elif self.args.features == 'M' and self.args.channel_strategy == "CI_one":
                 # 由于channel维和num_sample维合并了，所以这个时候的enc_in就等于1
                 self.revin_train = RevIN(num_features=1)
@@ -659,6 +727,7 @@ class Exp_Main_GBDT(Exp_Basic):
         print("MAE on test:", mean_absolute_error(test_y, pred_y))
         
         test_mse = mean_squared_error(test_y, pred_y)
+        test_mae = mean_absolute_error(test_y, pred_y)
         
         feature_importance_weight = model.get_booster().get_score(importance_type='weight')
         print("features length: ", len(feature_importance_weight.items()))
@@ -699,7 +768,7 @@ class Exp_Main_GBDT(Exp_Basic):
         #     plt.tight_layout()
         #     plt.savefig(f"gbdt_figures/test_forecsats_{i}.pdf")
         
-        return val_mse, test_mse
+        return val_mse, test_mse, test_mae
 
 
 

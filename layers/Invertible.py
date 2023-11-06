@@ -39,7 +39,7 @@ class RevIN(nn.Module):
         dim2reduce = tuple(range(1, x.ndim-1))
         print("x.ndim:", x.ndim)
         print("x.shape:", x.shape)
-        print("dim2reduce", dim2reduce)
+        print("dim2reduce:", dim2reduce)
         if x.ndim >= 3:
             # 由于一般的时间序列输入为[batch_size, seq_len, feature_numbers]
             # 所以这里可以对seq_len这一维取mean
@@ -49,6 +49,7 @@ class RevIN(nn.Module):
             # 而如果输入是[batch_size, seq_len*feature_numbers]
             # 那么此时只对最后一维取mean了
             dim2reduce = tuple(range(1, x.ndim))
+            print("dim2reduce_new:", dim2reduce)
             self.mean = torch.mean(x, dim=dim2reduce, keepdim=True).detach()
             self.stdev = torch.sqrt(torch.var(x, dim=dim2reduce, keepdim=True, unbiased=False) + self.eps).detach()
 
