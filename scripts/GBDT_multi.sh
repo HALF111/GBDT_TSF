@@ -12,14 +12,16 @@ python -u run.py  --is_training 1  --root_path ./dataset/ETT-small/  --data_path
 # 1.3 XGBoost
 # (0) CI_one + no RevIN + sl96: val_mse: 0.6697, test_mse: 0.3758, test_mae: 0.3903 yes
 # (0) CI_one + no RevIN + sl336: val_mse: 0.6795, test_mse: 0.3711, test_mae: 0.3909 yes
-# (1) CI_one + only RevIN + sl96: val_mse: 0.7086, test_mse: 0.3773, test_mae: 0.3869 yes
+# (1) CI_one + only RevIN + sl96: train_mse: 0.3322, val_mse: 0.7086, test_mse: 0.3773, test_mae: 0.3869 yes
 # (1) CI_one + only RevIN + sl336: val_mse: 0.6966, test_mse: 0.3734, test_mae: 0.3850 yes
-# (2) CI_one + only RevIN + sl96 + x_mark: val_mse: 0.7220, test_mse: 0.3864, test_mae: 0.3931 yes
+# (2) CI_one + only RevIN + sl96 + x_mark: train_mse: 0.3283, val_mse: 0.7220, test_mse: 0.3864, test_mae: 0.3931 yes
 # (2) CI_one + only RevIN + sl336 + x_mark: val_mse: 0.7090, test_mse: 0.3848, test_mae: 0.3954 yes
-# (3) CI_one + only RevIN + sl96 + mean&var: val_mse: 0.7075, test_mse: 0.3737, test_mae: 0.3867 yes
-# (3) CI_one + only RevIN + sl336 + mean&var: val_mse: 0.6939, test_mse: 0.3737, test_mae: 0.3858 yes
-# (4) CI_one + only RevIN + sl96 + mean&var + patch16+8: val_mse: 0.7069, test_mse: 0.3751, test_mae: 0.3876 yes
-# (4) CI_one + only RevIN + sl336 + mean&var + patch16+8: val_mse: 0.6883, test_mse: 0.3746, test_mae: 0.3865 yes
+# RevIN + sl96 + mean&std	0.3194	0.6893	0.3786	0.3869
+# RevIN + sl336 + mean&std	0.3008	0.6828	0.3748	0.3853
+# (3) CI_one + only RevIN + sl96 + mean&std: train_mse: 0.3147, val_mse: 0.6940, test_mse: 0.3895, test_mae: 0.3930 yes
+# (3) CI_one + only RevIN + sl336 + mean&std: train_mse: 0.2951, val_mse: 0.6834, test_mse: 0.3861, test_mae: 0.3948 yes
+# (4) CI_one + only RevIN + sl96 + mean&std + patch16+8: val_mse: 0.7069, test_mse: 0.3751, test_mae: 0.3876 np
+# (4) CI_one + only RevIN + sl336 + mean&std + patch16+8: val_mse: 0.6883, test_mse: 0.3746, test_mae: 0.3865 no
 # (5) CI_one + only RevIN + sl96 + patch16+8: val_mse: 0.7095, test_mse: 0.3768, test_mae: 0.3874 yes
 # (5) CI_one + only RevIN + sl336 + patch16+8: val_mse: 0.6964, test_mse: 0.3732, test_mae: 0.3853 yes
 python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ETTh1.csv --task_id ETTh1 --model gbdt --data ETTh1 --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 7 --dec_in 7 --c_out 7 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train
@@ -39,7 +41,7 @@ python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ET
 # (1) CI_one + only RevIN + sl336: val_mse: 0.2162; test_mse: 0.2813, test_mae: 0.3369 yes
 # (2) CI_one + only RevIN + sl96 + x_mark: val_mse: 0.2161; test_mse: 0.2931, test_mae: 0.3380 yes
 # (2) CI_one + only RevIN + sl336 + x_mark: val_mse: 0.2156; test_mse: 0.2861, test_mae: 0.3392 yes
-python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ETTh2.csv --task_id ETTh2 --model gbdt --data ETTh2 --features S --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 1 --dec_in 1 --c_out 1 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --use_VT --add_revin
+python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ETTh2.csv --task_id ETTh2 --model gbdt --data ETTh2 --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 7 --dec_in 7 --c_out 7 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin
 
 
 
@@ -71,16 +73,16 @@ python -u run.py --is_training 1 --root_path ./dataset/exchange_rate/ --data_pat
 # (0) CI_one + no RevIN + sl36: val_mse: 0.2466, test_mse: 5.4373, test_mae: 1.5163 yes
 # (0) CI_one + no RevIN + sl104: val_mse: 0.2627, test_mse: 3.6280, test_mae: 1.1987 yes
 # (0).1 CF + no RevIN + sl80: val_mse: 0.2758, test_mse: 4.3887, test_mae: 1.3483 yes
-# (1) CI_one + only RevIN + sl36: val_mse: 0.2210, test_mse: 2.1549, test_mae: 0.8370 yes
+# (1) CI_one + only RevIN + sl36: train_mse: 0.3201, val_mse: 0.2210, test_mse: 2.1549, test_mae: 0.8370 yes
 # (1) CI_one + only RevIN + sl52: val_mse: 0.2558, test_mse: 1.4176, test_mae: 0.7191 yes
 # (1) CI_one + only RevIN + sl60: val_mse: 0.2283, test_mse: 1.3313, test_mae: 0.6959 yes
-# (1) CI_one + only RevIN + sl80: val_mse: 0.2616, test_mse: 1.2576, test_mae: 0.6796 yes
+# (1) CI_one + only RevIN + sl80: train_mse:0.1394, val_mse: 0.2616, test_mse: 1.2576, test_mae: 0.6796 yes
 # (1) CI_one + only RevIN + sl104: val_mse: 0.2741, test_mse: 1.5721, test_mae: 0.7865 yes
 # (1).1 CF + only RevIN + sl80: val_mse: 0.2782, test_mse: 2.0717, test_mae: 0.9404 yes
-# (2) CI_one + only RevIN + sl36 + x_mark: val_mse: 0.2203, test_mse: 2.1630, test_mae: 0.8371 yes
+# (2) CI_one + only RevIN + sl36 + x_mark: train_mse: 0.3174, val_mse: 0.2203, test_mse: 2.1630, test_mae: 0.8371 yes
 # (2) CI_one + only RevIN + sl52 + x_mark: val_mse: 0.2544, test_mse: 1.4146, test_mae: 0.7175 yes
 # (2) CI_one + only RevIN + sl60 + x_mark: val_mse: 0.2287, test_mse: 1.3316, test_mae: 0.6959 yes
-# (2) CI_one + only RevIN + sl80 + x_mark : val_mse: 0.2592, test_mse: 1.2538, test_mae: 0.6786 yes
+# (2) CI_one + only RevIN + sl80 + x_mark : train_mse:0.1393, val_mse: 0.2592, test_mse: 1.2538, test_mae: 0.6786 yes
 # (2) CI_one + only RevIN + sl104 + x_mark: val_mse: 0.2741, test_mse: 1.6366, test_mae: 0.8112 yes
 # (2).1 CF + only RevIN + sl80 + x_mark: val_mse: 0.2777, test_mse: 2.0717, test_mae: 0.9401 yes
 # (3) CI_one + only RevIN + sl80 + mean&var : val_mse: 0.2218, test_mse: 1.8091, test_mae: 0.8051 yes

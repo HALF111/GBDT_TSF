@@ -128,7 +128,7 @@ def main():
     parser.add_argument('--use_VT', action='store_true')
     parser.add_argument('--channel_strategy', default="CI_one", type=str, help='CF/CI_one/CI_indiv')
     parser.add_argument('--add_x_mark', action='store_true')
-    parser.add_argument('--add_mean_var', action='store_true')
+    parser.add_argument('--add_mean_std', action='store_true')
     parser.add_argument('--add_patch_info', action='store_true')
     parser.add_argument('--patch_len', type=int, default=16, help='patch_length')
     parser.add_argument('--stride', type=int, default=8, help='patch_length')
@@ -193,10 +193,11 @@ def main():
             if args.run_train:
                 print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
                 if "gb" in args.model:
-                    val_mse, test_mse, test_mae = exp.train(setting)
+                    train_mse, val_mse, test_mse, test_mae = exp.train(setting)
                 else:
                     exp.train(setting)
                 
+                print("train_mse:", train_mse)
                 print("val_mse:", val_mse)
                 print("test_mse:", test_mse)
                 print("test_mae:", test_mae)

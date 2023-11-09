@@ -294,6 +294,7 @@ class Exp_Main_GBDT(Exp_Basic):
     def add_features(self, data_x_train, data_x_vali, data_x_test, data_x_mark_train, data_x_mark_vali, data_x_mark_test):
         data_x_new_total = {}
         phase_current = 0
+        feature_names = []
         for flag in ["train", "vali", "test"]:
             # * feature 1: +RevIN
             # 注意要把data_x变成tensor之后revin才能接受
@@ -320,18 +321,22 @@ class Exp_Main_GBDT(Exp_Basic):
                 data_x_new = data_x
             print("data_x_new.shape", data_x_new.shape)
             
+            # 添加进feature_names
+            if flag == "train":
+                prompt = "rev" if self.args.add_revin else "v"
+                f_list = [prompt + str(i) for i in range(self.args.seq_len)]
+                feature_names.extend(f_list)
+            
             
             # * feature 2: mean & variance
-            # mean 重要性占比很低
-            # 而variance和std占比很高，但是考虑这两者之后结果也变差了
-            # 沿着seq_len维度求和
-            mean = np.mean(data_x_new, axis=1)
-            var = np.var(data_x_new, axis=1)
-            std = np.std(data_x_new, axis=1)
-            mean = mean.reshape(mean.shape[0], 1)
-            var = var.reshape(var.shape[0], 1)
-            std = std.reshape(std.shape[0], 1)
+            # 注意这里不能用RevIN之后的mean和var，因为归一化后，mean肯定为0，var肯定为1
+            # 所以应当从revin中把之前的mean和var取出来
+            mean = revin_model.mean
+            stdev = revin_model.stdev
+            # mean = mean.reshape(mean.shape[0], 1)
+            # std = std.reshape(std.shape[0], 1)
             print("mean.shape:", mean.shape)
+            # print(mean, stdev)
             
             # data_x_new = np.concatenate((data_x_new, mean), axis=1)
             # data_x_new = np.concatenate((data_x_new, var), axis=1)
@@ -356,23 +361,28 @@ class Exp_Main_GBDT(Exp_Basic):
             # 考虑到如果先加了全局的mean&variance，会导致特征数变多，从而导致patch时可能会将mean&variance也当作原始序列
             # 所以feature 2和feature 3在后面一起加进去
             # 先加feature 2
-            if self.args.add_mean_var:
+            if self.args.add_mean_std:
                 data_x_new = np.concatenate((data_x_new, mean), axis=1)
-                data_x_new = np.concatenate((data_x_new, var), axis=1)
-                data_x_new = np.concatenate((data_x_new, std), axis=1)
+                data_x_new = np.concatenate((data_x_new, stdev), axis=1)
+                # 添加进feature_names
+                if flag == "train":
+                    f_list = ["mean", "stdev"]
+                    feature_names.extend(f_list)
             # 再加feature 3
             if self.args.add_patch_info:
-                for patch in patches:
+                for i in range(len(patches)):
+                    patch = patches[i]
                     tmp_mean = np.mean(patch, axis=1)
-                    tmp_var = np.var(patch, axis=1)
-                    tmp_std = np.std(patch, axis=1)
+                    tmp_stdev = np.std(patch, axis=1)
                     tmp_mean = tmp_mean.reshape(tmp_mean.shape[0], 1)
-                    tmp_var = tmp_var.reshape(tmp_var.shape[0], 1)
-                    tmp_std = tmp_std.reshape(tmp_std.shape[0], 1)
+                    tmp_stdev = tmp_stdev.reshape(tmp_stdev.shape[0], 1)
                     data_x_new = np.concatenate((data_x_new, tmp_mean), axis=1)
-                    data_x_new = np.concatenate((data_x_new, tmp_var), axis=1)
-                    data_x_new = np.concatenate((data_x_new, tmp_std), axis=1)
-                
+                    data_x_new = np.concatenate((data_x_new, tmp_stdev), axis=1)
+                    # 添加进feature_names
+                    if flag == "train":
+                        f_list = [f"patch_mean_{i}", f"patch_stdev_{i}"]
+                        feature_names.extend(f_list)
+            
             
             # * feature 4: periodic phase
             # * we use data_x_mark instead
@@ -392,12 +402,18 @@ class Exp_Main_GBDT(Exp_Basic):
                 
             if self.args.add_x_mark:
                 if self.args.features == 'M' and self.args.channel_strategy == "CI_one":
+                    # data_x_mark = (data_x_mark + 1)*24  # 将所有数+1，保证都是非负的
                     data_x_mark_info = [data_x_mark for _ in range(self.args.enc_in)]
                     data_x_mark_info = np.vstack(data_x_mark_info)
                 else:
                     data_x_mark_info = data_x_mark
                 print("data_x_mark_info.shape", data_x_mark_info.shape)
                 data_x_new = np.concatenate((data_x_new, data_x_mark_info), axis=1)
+                
+                # 添加进feature_names
+                if flag == "train":
+                    f_list = [f"x_mark_{i}" for i in range(data_x_mark.shape[-1])]
+                    feature_names.extend(f_list)
             
             
             # data_x_new = np.concatenate((data_x_new, phase_info), axis=1)
@@ -405,10 +421,13 @@ class Exp_Main_GBDT(Exp_Basic):
             print("data_x_new.shape:", data_x_new.shape)
             print("data_x_new:", data_x_new)
             
+            total_feature_nums = data_x_new.shape[-1]
+            discrete_feature_nums = data_x_mark.shape[-1] if self.args.add_x_mark else 0
+            
             data_x_new_total[flag] = data_x_new
         
         
-        return data_x_new_total["train"], data_x_new_total["vali"], data_x_new_total["test"]
+        return data_x_new_total["train"], data_x_new_total["vali"], data_x_new_total["test"], total_feature_nums, discrete_feature_nums, feature_names
         # return x.detach().numpy()
         
     
@@ -456,7 +475,8 @@ class Exp_Main_GBDT(Exp_Basic):
             
             # 在x上加上新的特征
             # train_x_after, vali_x_after, test_x_after = self.add_features(train_x, vali_x, test_x)
-            train_x_after, vali_x_after, test_x_after = self.add_features(train_x, vali_x, test_x, train_x_mark, vali_x_mark, test_x_mark)
+            train_x_after, vali_x_after, test_x_after, total_feature_nums, discrete_feature_nums, feature_names = \
+                self.add_features(train_x, vali_x, test_x, train_x_mark, vali_x_mark, test_x_mark)
             print(type(train_x_after), train_x_after.shape)
             # print(train_x)
         else:
@@ -466,15 +486,16 @@ class Exp_Main_GBDT(Exp_Basic):
             test_x_after = test_x.copy()
         
         
+        train_mse = 10000  # 先在外面定义一个train_mse
         def custom_mse_after_revin(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
             sample_num = y_pred.shape[0]
             seq_len = y_pred.shape[1]
-            print(sample_num, seq_len)
+            # print(sample_num, seq_len)
             
             # print("y_pred before revin", y_pred)
             y_pred = self.revin_train(torch.from_numpy(y_pred), "denorm")
             y_pred = y_pred.detach().numpy()
-            print(type(y_pred), y_pred.shape)
+            # print(type(y_pred), y_pred.shape)
             # print("y_pred after revin", y_pred)
             
             y_true = y_true.reshape(*y_pred.shape)
@@ -486,6 +507,9 @@ class Exp_Main_GBDT(Exp_Basic):
             grad = grad.reshape((sample_num*seq_len, 1))
             hess = hess.reshape((sample_num*seq_len, 1))
             
+            train_mse = mean_squared_error(y_true, y_pred)
+            print(f"train_mse: {train_mse}")
+            
             return grad, hess
         
         # 自定义损失函数：
@@ -494,7 +518,7 @@ class Exp_Main_GBDT(Exp_Basic):
             
             sample_num = y_pred.shape[0]
             seq_len = y_pred.shape[1]
-            print(sample_num, seq_len)
+            # print(sample_num, seq_len)
             
             # print(type(y_pred), y_pred.shape)
             # print(y_pred)
@@ -519,21 +543,22 @@ class Exp_Main_GBDT(Exp_Basic):
         
         def custom_mse_vali(y_true, y_pred):
             y_true = y_true.reshape(*y_pred.shape)
-            print(y_pred.shape, y_true.shape)
+            # print(y_pred.shape, y_true.shape)
             mse = mean_squared_error(y_true, y_pred)
             return mse
         
         def custom_mse_vali_after_revin(y_true, y_pred):
             y_true = y_true.reshape(*y_pred.shape)
-            print(y_pred.shape, y_true.shape)
+            # print(y_pred.shape, y_true.shape)
             
             # print("y_pred before revin", y_pred)
             y_pred = self.revin_vali(torch.from_numpy(y_pred), "denorm")
             y_pred = y_pred.detach().numpy()
-            print(type(y_pred), y_pred.shape)
+            # print(type(y_pred), y_pred.shape)
             # print("y_pred after revin", y_pred)
             
             mse = mean_squared_error(y_true, y_pred)
+            print(f"vali_mse: {mse}")
             return mse
         
         # 根据输入超参数控制采用哪种multi-output策略
@@ -544,10 +569,15 @@ class Exp_Main_GBDT(Exp_Basic):
         custom_obj = custom_mse_after_revin if self.args.add_revin else custom_mse
         custom_eval_metric = custom_mse_vali_after_revin if self.args.add_revin else custom_mse_vali
         
+        print(f"total_feature_nums: {total_feature_nums}")
+        print(f"discrete_feature_nums:{discrete_feature_nums}")
+        feature_types = ['q']*(total_feature_nums-discrete_feature_nums) + ['c']*discrete_feature_nums
+        
         model = xgb.XGBRegressor(
                         max_depth=3,          # 每一棵树最大深度，默认6；
                         learning_rate=0.1,      # 学习率，每棵树的预测结果都要乘以这个学习率，默认0.3；
-                        n_estimators=100,        # 使用多少棵树来拟合，也可以理解为多少次迭代。默认100；
+                        # n_estimators=100,        # 使用多少棵树来拟合，也可以理解为多少次迭代。默认100；
+                        n_estimators=200,
                         # objective='reg:linear',   # 此默认参数与 XGBClassifier 不同
                         # objective='reg:squarederror',
                         # objective=custom_mse,
@@ -566,6 +596,7 @@ class Exp_Main_GBDT(Exp_Basic):
                         # 该参数可以取值one_output_per_tree（默认值）用于为每个目标构建一个模型，(当pl=96时对应于建96棵树)
                         # 或者取值multi_output_tree用于构建多输出树。(只用一棵树建模，但是每个叶子都包含一个长为96的向量)
                         multi_strategy=multi_strategy,
+                        # feature_types=feature_types,
                     )
 
         
@@ -620,11 +651,14 @@ class Exp_Main_GBDT(Exp_Basic):
             # print(test_y)
             # print("MSE on test: ", mean_squared_error(test_y, pred_y))
         else:
-            model.fit(train_x_after, train_y, eval_set=[(vali_x_after, vali_y)], early_stopping_rounds=20)
+            model.fit(train_x_after, train_y, eval_set=[(vali_x_after, vali_y)], early_stopping_rounds=20, verbose=True)
         
         
         # a = xgb.QuantileDMatrix()
         
+        
+        # 将模型的feature_names转成我们刚才定义的feature_names
+        model.get_booster().feature_names = feature_names
         
         
         # # 如果又revin的话，还需要denorm回来
@@ -747,6 +781,8 @@ class Exp_Main_GBDT(Exp_Basic):
         # xgb.plot_importance(model)
         # plt.savefig("plot_importance.pdf")
         
+        model.get_booster().dump_model("model_dump.json")
+        
         # # visualization
         # fontsize = 16
         # for i in range(0, test_y.shape[0], 100):
@@ -768,7 +804,7 @@ class Exp_Main_GBDT(Exp_Basic):
         #     plt.tight_layout()
         #     plt.savefig(f"gbdt_figures/test_forecsats_{i}.pdf")
         
-        return val_mse, test_mse, test_mae
+        return train_mse, val_mse, test_mse, test_mae
 
 
 
