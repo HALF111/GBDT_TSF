@@ -302,11 +302,11 @@ class Exp_Main_GBDT(Exp_Basic):
             elif flag == "vali": revin_model = self.revin_vali; data_x = data_x_vali; data_x_mark = data_x_mark_vali
             elif flag == "test": revin_model = self.revin_test; data_x = data_x_test; data_x_mark = data_x_mark_test
             
-            x_revin = revin_model(torch.from_numpy(data_x), "norm")  # norm
-            print("x_revin.shape:", x_revin.shape)
+            data_x_revin = revin_model(torch.from_numpy(data_x), "norm")  # norm
+            print("data_x_revin.shape:", data_x_revin.shape)
             print("data_x.shape before revin: ", data_x.shape)
-            print("x before revin: ", data_x)
-            print("x after revin: ", x_revin.detach().numpy())
+            print("data_x before revin: ", data_x)
+            print("data_x_revin after revin: ", data_x_revin.detach().numpy())
             print("revin_model.mean:", revin_model.mean.shape, revin_model.mean)
             print("revin_model.stdev:", revin_model.stdev.shape, revin_model.stdev)
             print("revin_model.affine_weight", revin_model.affine_weight.shape, revin_model.affine_weight)
@@ -316,7 +316,7 @@ class Exp_Main_GBDT(Exp_Basic):
             if self.args.add_revin:
                 # data_x_new = np.concatenate((data_x, x_revin.detach().numpy()), axis=1)
                 # data_x_new = np.concatenate((x_revin.detach().numpy(), data_x), axis=1)
-                data_x_new = x_revin.detach().numpy()
+                data_x_new = data_x_revin.detach().numpy()
             else:
                 data_x_new = data_x
             print("data_x_new.shape", data_x_new.shape)
@@ -347,15 +347,100 @@ class Exp_Main_GBDT(Exp_Basic):
             patch_len = self.args.patch_len
             stride = self.args.stride
             patches = []
-            i = 0
-            while i+patch_len <= seq_len:
-                cur_data_x = data_x_new[:, i: i+patch_len]
+            idx = 0
+            while idx+patch_len <= seq_len:
+                cur_data_x = data_x_new[:, idx: idx+patch_len]
                 patches.append(cur_data_x)
-                i += stride
+                idx += stride
             
             print("len(patches):", len(patches))
             print("patches[0].shape:", patches[0].shape)
             print("patches[-1].shape:", patches[-1].shape)
+            
+            
+            # * feature 4：FFT频域信息
+            # Fourier Transformation to frequency domain
+            def fft_tran_total(data, time):
+                complex_ary = np.fft.fft(data, axis=1)
+                print("complex_ary.shape:", complex_ary.shape)
+                y_ = np.fft.ifft(complex_ary).real
+                print("y_.shape:", y_.shape)
+                print("y_.size:", y_.size)
+                window_len = y_.shape[1]
+                fft_freq = np.fft.fftfreq(window_len, time[1] - time[0])
+                fft_pow = np.abs(complex_ary)  # 复数的模-Y轴
+                return fft_freq, fft_pow
+            
+            def fft_tran_seperate(data, time):
+                fft_freq, fft_pow = np.zeros_like(data), np.zeros_like(data)
+                for idx in range(data.shape[0]):
+                    cur_data = data[idx]
+                    complex_ary = np.fft.fft(cur_data)
+                    if(idx == 0): print("complex_ary.shape:", complex_ary.shape)
+                    
+                    y_ = np.fft.ifft(complex_ary).real
+                    if(idx == 0): print("y_.shape:", y_.shape)
+                    if(idx == 0): print("y_.size:", y_.size)
+                    
+                    window_len = data.shape[1]
+                    cur_fft_freq = np.fft.fftfreq(window_len, time[1] - time[0])
+                    cur_fft_pow = np.abs(complex_ary)  # 复数的模-Y轴
+                    
+                    fft_freq[idx] = cur_fft_freq
+                    fft_pow[idx] = cur_fft_pow
+                
+                return fft_freq, fft_pow
+            
+            time = np.linspace(0, 1, data_x.shape[1])
+            # time = np.linspace(0, data_x.shape[1], 1)
+            
+            # 对所有数据一起计算FFT结果
+            # fft_freq, fft_pow = fft_tran_total(data_x, time)
+            # 对所有数据分开计算FFT结果
+            fft_freq, fft_pow = fft_tran_seperate(data_x, time)
+            
+            print("fft_freq.shape:", fft_freq.shape)
+            print("fft_pow.shape:", fft_pow.shape)
+            print("fft_freq:", fft_freq)
+            print("fft_pow:", fft_pow)
+            
+            # 获得频率为正数的部分
+            # fft_freq_pos = fft_freq[fft_freq > 0]
+            fft_freq_pos = fft_freq[0][fft_freq[0] > 0]  # 如果对各个样本分开处理的话他们的频率事实上是一样的，所以只需要取出第一个就可以了
+            print("fft_freq_pos.shape:", fft_freq_pos.shape)
+            # 再获得频率大于0那部分对应的振幅
+            # 除以2是因为原来的振幅比较大？
+            fft_pow_pos = fft_pow[:, fft_freq[0] > 0] / 2
+            print("fft_pow_pos.shape:", fft_pow_pos.shape)
+            fft_pow_avg = fft_pow.mean(axis=0)  # 对各个样本和各个channel计算平均值
+            print("fft_pow_avg.shape:", fft_pow_avg.shape)
+            fft_pow_avg_pos = fft_pow_avg[fft_freq[0] > 0] / 2
+            print("fft_pow_avg_pos.shape:", fft_pow_avg_pos.shape)
+            print("fft_pow_avg_pos:", fft_pow_avg_pos)
+            
+            # 频率和振幅之间的图
+            plt.figure()
+            plt.title("FFT-results")
+            plt.xlabel("fft_freq")
+            plt.ylabel("fft_pow")
+            # 对每个channel都画一个图
+            # for i in range(fft_pow.shape[0]):
+            #     cur_fft_pow = fft_pow[i][fft_freq > 0] / 2
+            #     plt.plot(fft_freq[fft_freq > 0], cur_fft_pow, '-', lw=2)
+            plt.plot(fft_freq_pos, fft_pow_avg_pos, '-', lw=2)
+            plt.savefig('fft_freq_amp.png', bbox_inches='tight', dpi=256)
+            
+            # 周期和振幅之间的图
+            plt.figure()
+            fft_period_pos = np.zeros_like(fft_freq_pos)
+            for idx in range(fft_freq_pos.shape[0]):
+                fft_period_pos[idx] = seq_len / fft_freq_pos[idx]
+            print("fft_period_pos:", fft_period_pos)
+            plt.title("FFT-results")
+            plt.xlabel("fft_period")
+            plt.ylabel("fft_pow")
+            plt.plot(fft_period_pos, fft_pow_avg_pos, '-', lw=2)
+            plt.savefig('fft_period_amp.png', bbox_inches='tight', dpi=256)
             
             
             # 考虑到如果先加了全局的mean&variance，会导致特征数变多，从而导致patch时可能会将mean&variance也当作原始序列
@@ -382,9 +467,50 @@ class Exp_Main_GBDT(Exp_Basic):
                     if flag == "train":
                         f_list = [f"patch_mean_{i}", f"patch_stdev_{i}"]
                         feature_names.extend(f_list)
+            # 再加入feature 4
+            if self.args.add_fft:
+                # 此时data_x的shape为[sample_num * channel, seq_len]
+                # 而fft_pow的shape也为[sample_num * channel, seq_len]
+                # 所以我们要从pow中选出top-K振幅对应的振幅和周期，并输入模型中
+                # 从而被选中的fft_pow为[sample_num * channel, k]
+                
+                # 利用np.argsort函数
+                fft_top_k = self.args.fft_top_k
+                # 沿着last axis排序，并取出最后k个（最大的）
+                top_k_idx = np.argsort(fft_pow_pos, axis=-1)[:, -fft_top_k:]
+                # top_k_idx = np.argsort(fft_pow_pos, axis=-1)[:, :fft_top_k]
+                print("top_k_idx.shape:", top_k_idx.shape)
+                print("top_k_idx[:10]:", top_k_idx[:10])
+                
+                # ? 如何处理向量的坐标？
+                # ? 二重循环也太傻了
+                top_k_fft_pow, top_k_fft_period = np.zeros((fft_pow_pos.shape[0], fft_top_k)), np.zeros((fft_pow_pos.shape[0], fft_top_k))
+                print("fft_pow_pos.shape:", fft_pow_pos.shape)  # (sample_num * channel, (seq_len-1)/2)
+                print("fft_period_pos.shape.shape", fft_period_pos.shape)  # ((seq_len-1)/2,)
+                for i in range(fft_pow_pos.shape[0]):
+                    for k in range(fft_top_k):
+                        # 获取top_k_idx下标下的pow和period数据
+                        top_k_fft_pow[i, k] = fft_pow_pos[i][top_k_idx[i, k]]
+                        # 注意这里由于fft_period_pos只有一维，所以无需使用fft_period_pos[0]了！！！
+                        top_k_fft_period[i, k] = fft_period_pos[top_k_idx[i, k]]
+                # top_k_fft_pow = fft_pow_pos[top_k_idx]
+                # top_k_fft_period = fft_period_pos[top_k_idx]
+                print("top_k_fft_pow.shape:", top_k_fft_pow.shape)
+                print("top_k_fft_pow[:10]:", top_k_fft_pow[:10])
+                print("top_k_fft_period.shape;", top_k_fft_period.shape)
+                print("top_k_fft_period[:10]:", top_k_fft_period[:10])
+                
+                # 添加进features
+                data_x_new = np.concatenate((data_x_new, top_k_fft_pow), axis=1)
+                data_x_new = np.concatenate((data_x_new, top_k_fft_period), axis=1)
+                # 添加进feature_names
+                if flag == "train":
+                    f_list_pow = [f"pow_{i}" for i in range(fft_top_k)]
+                    feature_names.extend(f_list_pow)
+                    f_list_period = [f"period_{i}" for i in range(fft_top_k)]
+                    feature_names.extend(f_list_period)           
             
-            
-            # * feature 4: periodic phase
+            # * feature 5: periodic phase
             # * we use data_x_mark instead
             # 这个新特征的重要性占比很高，但是结果却下降了
             # phase_info = np.zeros_like(data_x)
@@ -507,6 +633,7 @@ class Exp_Main_GBDT(Exp_Basic):
             grad = grad.reshape((sample_num*seq_len, 1))
             hess = hess.reshape((sample_num*seq_len, 1))
             
+            global train_mse
             train_mse = mean_squared_error(y_true, y_pred)
             print(f"train_mse: {train_mse}")
             
@@ -538,6 +665,10 @@ class Exp_Main_GBDT(Exp_Basic):
             grad = grad.reshape((sample_num*seq_len, 1))
             hess = hess.reshape((sample_num*seq_len, 1))
             # print(grad.shape, hess.shape)
+            
+            global train_mse
+            train_mse = mean_squared_error(y_true, y_pred)
+            print(f"train_mse: {train_mse}")
             
             return grad, hess
         

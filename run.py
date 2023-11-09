@@ -132,6 +132,8 @@ def main():
     parser.add_argument('--add_patch_info', action='store_true')
     parser.add_argument('--patch_len', type=int, default=16, help='patch_length')
     parser.add_argument('--stride', type=int, default=8, help='patch_length')
+    parser.add_argument('--add_fft', action='store_true')
+    parser.add_argument('--fft_top_k', type=int, default=3, help='Top-K Fourier bases')
     # XGBoost参数
     parser.add_argument('--n_estimators', type=int, default=300, help='[300]')  # 有早停的话不需要设置这一项了
     parser.add_argument('--min_child_weight', type=int, default=1, help='[1,2,3]')
