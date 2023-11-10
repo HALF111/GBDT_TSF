@@ -5,6 +5,7 @@ import torch
 from exp.exp_main import Exp_Main
 from exp.exp_main_test import Exp_Main_Test
 from exp.exp_main_gbdt import Exp_Main_GBDT
+from exp.exp_main_gbdt_decom import Exp_Main_GBDT_Decom
 import random
 import numpy as np
 
@@ -134,6 +135,7 @@ def main():
     parser.add_argument('--stride', type=int, default=8, help='patch_length')
     parser.add_argument('--add_fft', action='store_true')
     parser.add_argument('--fft_top_k', type=int, default=3, help='Top-K Fourier bases')
+    parser.add_argument('--use_decomp', action='store_true')
     # XGBoost参数
     parser.add_argument('--n_estimators', type=int, default=300, help='[300]')  # 有早停的话不需要设置这一项了
     parser.add_argument('--min_child_weight', type=int, default=1, help='[1,2,3]')
@@ -158,7 +160,10 @@ def main():
     print(args)
 
     if "gb" in args.model:
-        Exp = Exp_Main_GBDT
+        if args.use_decomp:
+            Exp = Exp_Main_GBDT_Decom
+        else:
+            Exp = Exp_Main_GBDT
     else:
         # Exp = Exp_Main
         Exp = Exp_Main_Test
@@ -195,12 +200,19 @@ def main():
             if args.run_train:
                 print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
                 if "gb" in args.model:
-                    train_mse, val_mse, test_mse, test_mae = exp.train(setting)
+                    if args.use_decomp:
+                        train_mse, val_mse_season, val_mse_trend, test_mse, test_mae = exp.train(setting)
+                    else:
+                        train_mse, val_mse, test_mse, test_mae = exp.train(setting)
                 else:
                     exp.train(setting)
                 
                 print("train_mse:", train_mse)
-                print("val_mse:", val_mse)
+                if args.use_decomp:
+                    print("val_mse_season:", val_mse_season)
+                    print("val_mse_trend:", val_mse_trend)
+                else:
+                    print("val_mse:", val_mse)
                 print("test_mse:", test_mse)
                 print("test_mae:", test_mae)
                 
