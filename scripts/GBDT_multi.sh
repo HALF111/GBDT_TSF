@@ -69,8 +69,8 @@ python -u run.py --is_training 1 --root_path ./dataset/traffic/ --data_path traf
 # 7.3 XGBoost
 # (0) CI_one + no RevIN + sl96: val_mse: 0.5514, test_mse: 0.1941, test_mae: 0.3128 yes
 # (0) CI_one + no RevIN + sl336: val_mse: 1.022, test_mse: 0.3490, test_mae: 0.4047 yes
-# (1) CI_one + only RevIN + sl96: val_mse: train_mse: 0.1218, 0.1251, test_mse: 0.0841, test_mae: 0.2014 yes
-# (1) CI_one + only RevIN + sl336: val_mse: train_mse: 0.1134, 0.1260, test_mse: 0.0887, test_mae: 0.2093 yes
+# (1) CI_one + only RevIN + sl96: train_mse: 0.1218, val_mse: 0.1251, test_mse: 0.0841, test_mae: 0.2014 yes
+# (1) CI_one + only RevIN + sl336: train_mse: 0.1134, val_mse: 0.1260, test_mse: 0.0887, test_mae: 0.2093 yes
 # (2) CI_one + only RevIN + sl96 + x_mark: train_mse: 0.1218, val_mse: 0.1251, test_mse: 0.0841, test_mae: 0.2014 yes (x_mark没什么用)
 # (2) CI_one + only RevIN + sl336 + x_mark: train_mse: 0.1134, val_mse: 0.1260, test_mse: 0.0887, test_mae: 0.2093 yes (x_mark没什么用)
 # (2) CI_one + only RevIN + sl96 + mean_std: train_mse: 0.1334, val_mse: 0.1527, test_mse: 0.1186, test_mae: 0.2497 yes
@@ -88,7 +88,7 @@ python -u run.py --is_training 1 --root_path ./dataset/exchange_rate/ --data_pat
 # (1) CI_one + only RevIN + sl96: train_mse: 0.4801, val_mse: 0.4656, test_mse: 0.1874, test_mae: 0.2280 yes
 # (1) CI_one + only RevIN + sl336: train_mse: 0.4198, val_mse: 0.4071, test_mse: 0.1578, test_mae: 0.2047 yes
 # (2) CI_one + only RevIN + sl96 + x_mark: train_mse: 0.4786, val_mse: 0.4655, test_mse: 0.1877, test_mae: 0.2248 yes
-# (2) CI_one + only RevIN + sl336 + x_mark: train_mse: 0.1134, val_mse: 0.4117, test_mse: 0.1619, test_mae: 0.2082 yes
+# (2) CI_one + only RevIN + sl336 + x_mark: train_mse: 0.4134, val_mse: 0.4117, test_mse: 0.1619, test_mae: 0.2082 yes
 # (2) CI_one + only RevIN + sl96 + mean_std: train_mse: 0.1334, val_mse: 0.1527, test_mse: 0.1186, test_mae: 0.2497 no
 # (2) CI_one + only RevIN + sl336 + mean_std: train_mse: 0.1197, val_mse: 0.1705, test_mse: 0.1244, test_mae: 0.2626 no
 python -u run.py --is_training 1 --root_path ./dataset/weather/ --data_path weather.csv --task_id weather --model gbdt --data custom --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 21 --dec_in 21 --c_out 21 --des 'Exp' --itr 1 --gpu 0 --run_train --add_revin
