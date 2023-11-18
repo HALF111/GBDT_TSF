@@ -241,7 +241,12 @@ class Exp_Main_GBDT(Exp_Basic):
         train_y = train_y[:, -self.args.pred_len:, :]  # y中需要去掉label_len，只保留pred_len部分
         print("train_y.shape", train_y.shape)
         
+        # 考虑到train_x和train_y的维度通常为[samples, seq_len, channel]或[samples, pred_len, channel]
+        # 而train_x_mark目前的维度仅为[samples, x_mark_num, 1]
+        # 所以我们将train_x_mark也扩展channel倍，得到[samples, x_mark_num, channel]的形状
+        # 这样就和train_x和train_y的形状相同了
         train_x_mark = np.vstack(train_x_mark)
+        train_x_mark = train_x_mark.repeat(self.args.enc_in, axis=-1)
         print("train_x_mark.shape", train_x_mark.shape)
         
         # 考虑S或M的预测任务
@@ -258,35 +263,55 @@ class Exp_Main_GBDT(Exp_Basic):
             train_x_mark = train_x_mark.reshape(train_x.shape[0], -1)
             print("train_x_mark.shape", train_x_mark.shape)
         elif self.args.features == 'M':
-            if self.args.channel_strategy == "CF":
+            if self.args.channel_strategy == "CI_cov_indiv":
                 # 如果是channel-flatten策略，
                 # 那么将[samples, seq_len, channel]中后两维seq_len和channel合并成一维
                 # 因此输入会变成[samples, seq_len * channel]
                 train_x = train_x.reshape(train_x.shape[0], -1)
-                print("train_x.shape:", train_x.shape)
+                print("train_x.shape after:", train_x.shape)
                 train_y = train_y.reshape(train_y.shape[0], -1)
-                print("train_y.shape:", train_y.shape)
+                print("train_y.shape after:", train_y.shape)
                 
-                train_x_mark = train_x_mark.reshape(train_x.shape[0], -1)
-                print("train_x_mark.shape", train_x_mark.shape)
+                # PS：train_x_mark原来为[samples, mark_num, channel]
+                # 由于这里不需要channel信息，直接再变回[samples mark_num]即可
+                train_x_mark = train_x_mark[:, :, 0]
+                print("train_x_mark.shape after: after", train_x_mark.shape)
             elif self.args.channel_strategy == "CI_one":
                 # 如果是用一个模型同时拟合各个channel的策略，
                 # 那么将[samples, seq_len, channel]中samples和channel合并成一维
                 # 那么需要先permute一下，变成[samples, channel, seq_len]
-                # 然后再合并前两维x
+                # 然后再合并前两维x，变成[samples*channel, seq_len]
                 train_x = train_x.transpose((0, 2, 1))
                 train_x = train_x.reshape(-1, train_x.shape[-1])
-                print("train_x.shape:", train_x.shape)
+                print("train_x.shape after:", train_x.shape)
                 train_y = train_y.transpose((0, 2, 1))
                 train_y = train_y.reshape(-1, train_y.shape[-1])
-                print("train_y.shape:", train_y.shape)
+                print("train_y.shape after:", train_y.shape)
                 
                 train_x_mark = train_x_mark.transpose((0, 2, 1))
                 train_x_mark = train_x_mark.reshape(-1, train_x_mark.shape[-1])
-                print("train_x_mark.shape", train_x_mark.shape)
+                print("train_x_mark.shape after:", train_x_mark.shape)
             elif self.args.channel_strategy == "CI_indiv":
                 # train_x, train_y保持不变？
                 pass
+            elif self.args.channel_strategy == "CI_cov":
+                # 如果是用一个模型同时拟合各个channel，并将其他channel的值当作协变量引入的话
+                # 那么这里对于y和x_mark，先permute一下，变成[samples, channel, pred_len]
+                # 然后再合并前两维x，变成[samples*channel, pred_len]
+                # 但是对于x，我们需要两个channel的信息，从而先在axis=1处复制一次，得到[samples, channel, seq_len, channel]
+                # 最后分别做两次reshape，变成[samples*channel, seq_len*channel]的样子
+                train_x = np.expand_dims(train_x, axis=1).repeat(self.args.enc_in, axis=1)  # 增加一个大小为channel的维度
+                train_x = train_x.reshape(-1, train_x.shape[-2], train_x.shape[-1])  # 第一次reshape
+                train_x = train_x.reshape(train_x.shape[0], -1)
+                print("train_x.shape after:", train_x.shape)
+                
+                train_y = train_y.transpose((0, 2, 1))
+                train_y = train_y.reshape(-1, train_y.shape[-1])
+                print("train_y.shape after:", train_y.shape)
+                
+                train_x_mark = train_x_mark.transpose((0, 2, 1))
+                train_x_mark = train_x_mark.reshape(-1, train_x_mark.shape[-1])
+                print("train_x_mark.shape after:", train_x_mark.shape)
         
         return train_x, train_y, train_x_mark
     
@@ -302,41 +327,74 @@ class Exp_Main_GBDT(Exp_Basic):
             elif flag == "vali": revin_model = self.revin_vali; data_x = data_x_vali; data_x_mark = data_x_mark_vali
             elif flag == "test": revin_model = self.revin_test; data_x = data_x_test; data_x_mark = data_x_mark_test
             
-            data_x_revin = revin_model(torch.from_numpy(data_x), "norm")  # norm
-            print("data_x_revin.shape:", data_x_revin.shape)
             print("data_x.shape before revin: ", data_x.shape)
             print("data_x before revin: ", data_x)
+            if isinstance(revin_model, list):
+                # 此时是channel Fusion，从而channel和seq_len维度是混合在一起的。
+                # 所以我们需要暂时将这两维分开，以方便对各个channel各自完成RevIN
+                # 由于原来是[samples, seq_len * channel]，那么重新reshape回[samples, seq_len, channel]即可
+                data_x_sep = copy.deepcopy(torch.from_numpy(data_x))
+                data_x_sep = data_x_sep.reshape(data_x.shape[0], self.args.seq_len, self.args.enc_in)
+                for i, sub_revin_model in enumerate(revin_model):
+                    data_x_sep[:, :, i] = sub_revin_model(data_x_sep[:, :, i], "norm")
+                    # print(f"sub_revin_model_{i}.mean:", sub_revin_model.mean.shape, sub_revin_model.mean)
+                    # print(f"sub_revin_model_{i}.stdev:", sub_revin_model.stdev.shape, sub_revin_model.stdev)
+                # RevIN之后再重新reshape回来
+                data_x_revin = data_x_sep.reshape(data_x_sep.shape[0], -1)
+            elif self.args.features == 'M' and self.args.channel_strategy == "CI_cov_indiv" or \
+                self.args.features == 'M' and self.args.channel_strategy == "CI_cov" :
+                data_x_sep = copy.deepcopy(torch.from_numpy(data_x))
+                data_x_sep = data_x_sep.reshape(data_x.shape[0], self.args.seq_len, self.args.enc_in)
+                
+                data_x_sep = revin_model(data_x_sep, "norm")
+                
+                data_x_revin = data_x_sep.reshape(data_x_sep.shape[0], -1)
+                
+                print("revin_model.mean.transpose(0,1):", revin_model.mean.shape, revin_model.mean.transpose(0,1))
+                print("revin_model.stdev.transpose(0,1):", revin_model.stdev.shape, revin_model.stdev.transpose(0,1))
+                print("revin_model.affine_weight", revin_model.affine_weight.shape, revin_model.affine_weight)
+                print("revin_model.affine_bias:", revin_model.affine_bias.shape, revin_model.affine_bias)
+            else:
+                data_x_revin = copy.deepcopy(torch.from_numpy(data_x))
+                data_x_revin = revin_model(data_x_revin, "norm")  # norm
+                print("revin_model.mean.transpose(0,1):", revin_model.mean.shape, revin_model.mean.transpose(0,1))
+                print("revin_model.stdev.transpose(0,1):", revin_model.stdev.shape, revin_model.stdev.transpose(0,1))
+                print("revin_model.affine_weight", revin_model.affine_weight.shape, revin_model.affine_weight)
+                print("revin_model.affine_bias:", revin_model.affine_bias.shape, revin_model.affine_bias)
+            print("data_x.shape before revin: ", data_x.shape)
+            print("data_x_revin.shape after revin:", data_x_revin.shape)
+            print("data_x before revin: ", data_x)
             print("data_x_revin after revin: ", data_x_revin.detach().numpy())
-            print("revin_model.mean:", revin_model.mean.shape, revin_model.mean)
-            print("revin_model.stdev:", revin_model.stdev.shape, revin_model.stdev)
-            print("revin_model.affine_weight", revin_model.affine_weight.shape, revin_model.affine_weight)
-            print("revin_model.affine_bias:", revin_model.affine_bias.shape, revin_model.affine_bias)
             
             # data_x
             if self.args.add_revin:
                 # data_x_new = np.concatenate((data_x, x_revin.detach().numpy()), axis=1)
                 # data_x_new = np.concatenate((x_revin.detach().numpy(), data_x), axis=1)
-                data_x_new = data_x_revin.detach().numpy()
+                data_x_new = copy.deepcopy(data_x_revin.detach().numpy())
             else:
-                data_x_new = data_x
+                data_x_new = copy.deepcopy(data_x)
             print("data_x_new.shape", data_x_new.shape)
             
             # 添加进feature_names
             if flag == "train":
                 prompt = "rev" if self.args.add_revin else "v"
-                f_list = [prompt + str(i) for i in range(self.args.seq_len)]
+                if data_x_new.shape[-1] == self.args.seq_len:
+                    f_list = [prompt + str(i) for i in range(data_x_new.shape[-1])]
+                else:
+                    f_list = [f"{prompt}_c{i % self.args.enc_in}t{i // self.args.enc_in}" for i in range(data_x_new.shape[-1])]
                 feature_names.extend(f_list)
             
             
             # * feature 2: mean & variance
             # 注意这里不能用RevIN之后的mean和var，因为归一化后，mean肯定为0，var肯定为1
             # 所以应当从revin中把之前的mean和var取出来
-            mean = revin_model.mean
-            stdev = revin_model.stdev
-            # mean = mean.reshape(mean.shape[0], 1)
-            # std = std.reshape(std.shape[0], 1)
-            print("mean.shape:", mean.shape)
-            # print(mean, stdev)
+            if not isinstance(revin_model, list):
+                mean = revin_model.mean
+                stdev = revin_model.stdev
+                # mean = mean.reshape(mean.shape[0], 1)
+                # std = std.reshape(std.shape[0], 1)
+                print("mean.shape:", mean.shape)
+                # print(mean, stdev)
             
             # data_x_new = np.concatenate((data_x_new, mean), axis=1)
             # data_x_new = np.concatenate((data_x_new, var), axis=1)
@@ -349,7 +407,7 @@ class Exp_Main_GBDT(Exp_Basic):
             patches = []
             idx = 0
             while idx+patch_len <= seq_len:
-                cur_data_x = data_x_new[:, idx: idx+patch_len]
+                cur_data_x = copy.deepcopy(data_x_new[:, idx: idx+patch_len])
                 patches.append(cur_data_x)
                 idx += stride
             
@@ -391,13 +449,22 @@ class Exp_Main_GBDT(Exp_Basic):
                 
                 return fft_freq, fft_pow
             
-            time = np.linspace(0, 1, data_x.shape[1])
+            # 从data_x中复制得到data_fft
+            data_fft = copy.deepcopy(data_x)
+            if self.args.features == 'M' and self.args.channel_strategy == "CI_cov_indiv" or \
+                self.args.features == 'M' and self.args.channel_strategy == "CI_cov" :
+                data_fft = data_fft.reshape(data_fft.shape[0], self.args.seq_len, self.args.enc_in)
+                data_fft = data_fft.transpose((0, 2, 1))
+                data_fft = data_fft.reshape(-1, data_fft.shape[-1])
+            
+            time = np.linspace(0, 1, data_fft.shape[1])
             # time = np.linspace(0, data_x.shape[1], 1)
             
             # 对所有数据一起计算FFT结果
             # fft_freq, fft_pow = fft_tran_total(data_x, time)
             # 对所有数据分开计算FFT结果
-            fft_freq, fft_pow = fft_tran_seperate(data_x, time)
+            # ! 注意：这里仍然是对RevIN之前的data_x做的FFT
+            fft_freq, fft_pow = fft_tran_seperate(data_fft, time)
             
             print("fft_freq.shape:", fft_freq.shape)
             print("fft_pow.shape:", fft_pow.shape)
@@ -527,12 +594,16 @@ class Exp_Main_GBDT(Exp_Basic):
             #     phase_current += 1
                 
             if self.args.add_x_mark:
-                if self.args.features == 'M' and self.args.channel_strategy == "CI_one":
-                    # data_x_mark = (data_x_mark + 1)*24  # 将所有数+1，保证都是非负的
-                    data_x_mark_info = [data_x_mark for _ in range(self.args.enc_in)]
-                    data_x_mark_info = np.vstack(data_x_mark_info)
-                else:
-                    data_x_mark_info = data_x_mark
+                # if self.args.features == 'M' and self.args.channel_strategy == "CI_one":
+                #     # data_x_mark = (data_x_mark + 1)*24  # 将所有数+1，保证都是非负的
+                #     data_x_mark_info = [data_x_mark for _ in range(self.args.enc_in)]
+                #     data_x_mark_info = np.vstack(data_x_mark_info)
+                # else:
+                #     data_x_mark_info = data_x_mark
+                
+                # 考虑到channels在前面就有可能用到，
+                # 我们直接在get_data_for_gbdt函数中的data_x_mark中就把channel信息引入了
+                data_x_mark_info = data_x_mark
                 print("data_x_mark_info.shape", data_x_mark_info.shape)
                 data_x_new = np.concatenate((data_x_new, data_x_mark_info), axis=1)
                 
@@ -551,7 +622,9 @@ class Exp_Main_GBDT(Exp_Basic):
             discrete_feature_nums = data_x_mark.shape[-1] if self.args.add_x_mark else 0
             
             data_x_new_total[flag] = data_x_new
-        
+            
+            print("len(feature_names):", len(feature_names))
+            print("feature_names:", feature_names)
         
         return data_x_new_total["train"], data_x_new_total["vali"], data_x_new_total["test"], total_feature_nums, discrete_feature_nums, feature_names
         # return x.detach().numpy()
@@ -583,16 +656,18 @@ class Exp_Main_GBDT(Exp_Basic):
                 self.revin_train = RevIN(self.args.enc_in)
                 self.revin_vali = RevIN(self.args.enc_in)
                 self.revin_test = RevIN(self.args.enc_in)
-            elif self.args.features == 'M' and self.args.channel_strategy == "CF":
+            elif self.args.features == 'M' and self.args.channel_strategy == "CI_cov_indiv" or \
+                self.args.features == 'M' and self.args.channel_strategy == "CI_cov":
                 # # 如果channel-flatten，那么需要对后两位都做revin？
                 # self.revin_train = RevIN(self.args.enc_in * self.args.seq_len)
                 # self.revin_vali = RevIN(self.args.enc_in * self.args.seq_len)
                 # self.revin_test = RevIN(self.args.enc_in * self.args.seq_len)
                 
                 # 从结果来看，因为channel合并了，所以传给revin的num_features似乎还是为1
-                self.revin_train = RevIN(num_features=1)
-                self.revin_vali = RevIN(num_features=1)
-                self.revin_test = RevIN(num_features=1)
+                # 考虑到有多个channel，我们传给RevIN的参数应当为self.args.enc_in？
+                self.revin_train = RevIN(num_features=self.args.enc_in)
+                self.revin_vali = RevIN(num_features=self.args.enc_in)
+                self.revin_test = RevIN(num_features=self.args.enc_in)
             elif self.args.features == 'M' and self.args.channel_strategy == "CI_one":
                 # 由于channel维和num_sample维合并了，所以这个时候的enc_in就等于1
                 self.revin_train = RevIN(num_features=1)
@@ -603,6 +678,7 @@ class Exp_Main_GBDT(Exp_Basic):
             # train_x_after, vali_x_after, test_x_after = self.add_features(train_x, vali_x, test_x)
             train_x_after, vali_x_after, test_x_after, total_feature_nums, discrete_feature_nums, feature_names = \
                 self.add_features(train_x, vali_x, test_x, train_x_mark, vali_x_mark, test_x_mark)
+            
             print(type(train_x_after), train_x_after.shape)
             # print(train_x)
         else:
@@ -619,7 +695,27 @@ class Exp_Main_GBDT(Exp_Basic):
             # print(sample_num, seq_len)
             
             # print("y_pred before revin", y_pred)
-            y_pred = self.revin_train(torch.from_numpy(y_pred), "denorm")
+            if isinstance(self.revin_train, list):
+                y_pred_sep = copy.deepcopy(torch.from_numpy(y_pred))
+                y_pred_sep = y_pred_sep.reshape(y_pred.shape[0], self.args.pred_len, self.args.enc_in)
+                
+                for i, sub_revin_train in enumerate(self.revin_train):
+                    y_pred_sep[:, :, i] = sub_revin_train(y_pred_sep[:, :, i], "denorm")
+                y_pred = y_pred_sep.reshape(y_pred_sep.shape[0], -1)
+            elif self.args.features == 'M' and self.args.channel_strategy == "CI_cov_indiv":
+                y_pred_sep = copy.deepcopy(torch.from_numpy(y_pred))
+                y_pred_sep = y_pred_sep.reshape(y_pred.shape[0], self.args.pred_len, self.args.enc_in)
+                
+                y_pred_sep = self.revin_train(y_pred_sep, "denorm")
+                
+                y_pred = y_pred_sep.reshape(y_pred_sep.shape[0], -1)
+            elif self.args.features == 'M' and self.args.channel_strategy == "CI_cov":
+                # CI_cov事实上在这里会出问题
+                # 因为我们的RevIN的维度为channel维，所以理论上输入也应该是channel维的
+                # 而我们这里由于采取channel-independence策略，所以我们并不知道当前数据属于哪一个channel，导致这里无法将数据denorm回去了
+                y_pred_sep = copy.deepcopy(self.revin_train(torch.from_numpy(y_pred), "denorm"))
+            else:
+                y_pred = self.revin_train(torch.from_numpy(y_pred), "denorm")
             y_pred = y_pred.detach().numpy()
             # print(type(y_pred), y_pred.shape)
             # print("y_pred after revin", y_pred)
@@ -683,7 +779,24 @@ class Exp_Main_GBDT(Exp_Basic):
             # print(y_pred.shape, y_true.shape)
             
             # print("y_pred before revin", y_pred)
-            y_pred = self.revin_vali(torch.from_numpy(y_pred), "denorm")
+            if isinstance(self.revin_vali, list):
+                y_pred_sep = copy.deepcopy(torch.from_numpy(y_pred))
+                y_pred_sep = y_pred_sep.reshape(y_pred.shape[0], self.args.pred_len, self.args.enc_in)
+                
+                for i, sub_revin_vali in enumerate(self.revin_vali):
+                    y_pred_sep[:, :, i] = sub_revin_vali(y_pred_sep[:, :, i], "denorm")
+                y_pred = y_pred_sep.reshape(y_pred_sep.shape[0], -1)
+            elif self.args.features == 'M' and self.args.channel_strategy == "CI_cov_indiv":
+                y_pred_sep = copy.deepcopy(torch.from_numpy(y_pred))
+                y_pred_sep = y_pred_sep.reshape(y_pred.shape[0], self.args.pred_len, self.args.enc_in)
+                
+                y_pred_sep = self.revin_vali(y_pred_sep, "denorm")
+                
+                y_pred = y_pred_sep.reshape(y_pred_sep.shape[0], -1)
+            elif self.args.features == 'M' and self.args.channel_strategy == "CI_cov":
+                y_pred_sep = copy.deepcopy(self.revin_train(torch.from_numpy(y_pred), "denorm"))
+            else:
+                y_pred = self.revin_vali(torch.from_numpy(y_pred), "denorm")
             y_pred = y_pred.detach().numpy()
             # print(type(y_pred), y_pred.shape)
             # print("y_pred after revin", y_pred)
@@ -700,9 +813,10 @@ class Exp_Main_GBDT(Exp_Basic):
         custom_obj = custom_mse_after_revin if self.args.add_revin else custom_mse
         custom_eval_metric = custom_mse_vali_after_revin if self.args.add_revin else custom_mse_vali
         
-        print(f"total_feature_nums: {total_feature_nums}")
-        print(f"discrete_feature_nums:{discrete_feature_nums}")
-        feature_types = ['q']*(total_feature_nums-discrete_feature_nums) + ['c']*discrete_feature_nums
+        if self.args.add_revin:
+            print(f"total_feature_nums: {total_feature_nums}")
+            print(f"discrete_feature_nums:{discrete_feature_nums}")
+            feature_types = ['q']*(total_feature_nums-discrete_feature_nums) + ['c']*discrete_feature_nums
         
         model = xgb.XGBRegressor(
                         max_depth=3,          # 每一棵树最大深度，默认6；
@@ -789,7 +903,8 @@ class Exp_Main_GBDT(Exp_Basic):
         
         
         # 将模型的feature_names转成我们刚才定义的feature_names
-        model.get_booster().feature_names = feature_names
+        if self.args.add_revin:
+            model.get_booster().feature_names = feature_names
         
         
         # # 如果又revin的话，还需要denorm回来
@@ -875,10 +990,28 @@ class Exp_Main_GBDT(Exp_Basic):
         #     model = model.named_steps["model"].model
         
         # 自定义后处理函数
-        def post_processing(predictions): 
-            processed_predictions = self.revin_test(torch.from_numpy(predictions), "denorm")
-            processed_predictions = processed_predictions.detach().numpy()
-            return processed_predictions
+        def post_processing(y_pred): 
+            if isinstance(self.revin_test, list):
+                y_pred_sep = copy.deepcopy(torch.from_numpy(y_pred))
+                y_pred_sep = y_pred_sep.reshape(y_pred.shape[0], self.args.pred_len, self.args.enc_in)
+                
+                for i, sub_revin_test in enumerate(self.revin_test):
+                    y_pred_sep[:, :, i] = sub_revin_test(y_pred_sep[:, :, i], "denorm")
+                y_pred_denorm = y_pred_sep.reshape(y_pred_sep.shape[0], -1)
+            elif self.args.features == 'M' and self.args.channel_strategy == "CI_cov_indiv":
+                y_pred_sep = copy.deepcopy(torch.from_numpy(y_pred))
+                y_pred_sep = y_pred_sep.reshape(y_pred.shape[0], self.args.pred_len, self.args.enc_in)
+                
+                y_pred_sep = self.revin_test(y_pred_sep, "denorm")
+                
+                y_pred_denorm = y_pred_sep.reshape(y_pred_sep.shape[0], -1)
+            elif self.args.features == 'M' and self.args.channel_strategy == "CI_cov":
+                y_pred_sep = copy.deepcopy(self.revin_train(torch.from_numpy(y_pred), "denorm"))
+            else:
+                y_pred_denorm = self.revin_test(torch.from_numpy(y_pred), "denorm")
+            
+            y_pred_denorm = y_pred_denorm.detach().numpy()
+            return y_pred_denorm
         
         pred_y = model.predict(test_x_after)
         # 如果做了revin，别忘记denorm回来

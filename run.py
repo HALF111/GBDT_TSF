@@ -127,7 +127,7 @@ def main():
     # 特征工程
     parser.add_argument('--add_revin', action='store_true')
     parser.add_argument('--use_VT', action='store_true')
-    parser.add_argument('--channel_strategy', default="CI_one", type=str, help='CF/CI_one/CI_indiv')
+    parser.add_argument('--channel_strategy', default="CI_one", type=str, help='CI_one/CI_indiv/CI_cov/CI_cov_indiv')
     parser.add_argument('--add_x_mark', action='store_true')
     parser.add_argument('--add_mean_std', action='store_true')
     parser.add_argument('--add_patch_info', action='store_true')

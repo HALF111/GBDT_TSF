@@ -26,7 +26,7 @@ python -u run.py  --is_training 1  --root_path ./dataset/ETT-small/  --data_path
 # (5) CI_one + only RevIN + sl336 + patch16+8: val_mse: 0.6964, test_mse: 0.3732, test_mae: 0.3853 yes
 # (6) CI_one + only RevIN + sl96 + top-3 FFT : train_mse: 0.3106, val_mse: 0.6944, test_mse: 0.3697, test_mae: 0.3864 yes
 # (6) CI_one + only RevIN + sl336 + top-3 FFT : train_mse: 0.2825, val_mse: 0.6890, test_mse: 0.3772, test_mae: 0.3892 yes
-python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ETTh1.csv --task_id ETTh1 --model gbdt --data ETTh1 --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 7 --dec_in 7 --c_out 7 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin
+python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ETTh1.csv --task_id ETTh1 --model gbdt --data ETTh1 --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 7 --dec_in 7 --c_out 7 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin --channel_strategy CI_one
 
 
 
