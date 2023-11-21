@@ -136,4 +136,4 @@ dmypy.json
 /test_results
 *.pth
 
-./model_dump.json
+model_dump.json
