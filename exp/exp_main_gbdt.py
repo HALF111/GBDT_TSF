@@ -1037,6 +1037,9 @@ class Exp_Main_GBDT(Exp_Basic):
         # print(tmp[:10])
         print(tmp)
         
+        # # 将模型以json格式保留下来
+        # model.get_booster().dump_model("model_dump.json")
+        
         # # xgb.plot_tree(model, num_trees=0, fmap='xgb.fmap')
         # xgb.plot_tree(model, num_trees=0)
         # fig = plt.gcf()
@@ -1045,7 +1048,6 @@ class Exp_Main_GBDT(Exp_Basic):
         # xgb.plot_importance(model)
         # plt.savefig("plot_importance.pdf")
         
-        model.get_booster().dump_model("model_dump.json")
         
         # # visualization
         # fontsize = 16
