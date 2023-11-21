@@ -821,8 +821,8 @@ class Exp_Main_GBDT(Exp_Basic):
         model = xgb.XGBRegressor(
                         max_depth=3,          # 每一棵树最大深度，默认6；
                         learning_rate=0.1,      # 学习率，每棵树的预测结果都要乘以这个学习率，默认0.3；
-                        # n_estimators=100,        # 使用多少棵树来拟合，也可以理解为多少次迭代。默认100；
-                        n_estimators=200,
+                        n_estimators=100,        # 使用多少棵树来拟合，也可以理解为多少次迭代。默认100；
+                        # n_estimators=200,
                         # objective='reg:linear',   # 此默认参数与 XGBClassifier 不同
                         # objective='reg:squarederror',
                         # objective=custom_mse,

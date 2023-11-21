@@ -3,12 +3,14 @@
 # 1.1 FEDformer
 # 注意是S且enc_in,dec_in等均为1
 # mse: 0.0841
-python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ETTh1.csv --task_id ETTh1 --model FEDformer --data ETTh1 --features S --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 1 --dec_in 1 --c_out 1 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --run_test
+# python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ETTh1.csv --task_id ETTh1 --model FEDformer --data ETTh1 --features S --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 1 --dec_in 1 --c_out 1 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --run_test
+
 # 1.2 Linear
 # mse:0.056, mae:0. 
-python -u run.py  --is_training 1  --root_path ./dataset/ETT-small/  --data_path ETTh1.csv --task_id ETTh1_336_96  --model DLinear  --data ETTh1  --features S  --seq_len 336  --pred_len 96  --enc_in 7  --des 'Exp'  --itr 1  --batch_size 32  --learning_rate 0.005  --gpu 1 --run_train --run_test
+# python -u run.py  --is_training 1  --root_path ./dataset/ETT-small/  --data_path ETTh1.csv --task_id ETTh1_336_96  --model DLinear  --data ETTh1  --features S  --seq_len 336  --pred_len 96  --enc_in 7  --des 'Exp'  --itr 1  --batch_size 32  --learning_rate 0.005  --gpu 1 --run_train --run_test
 # Linear: test_mse: 0.374, test_mae: 0.394
 # PatchTST: test_mse: 0.370, test_mae: 0.400
+
 # 1.3 XGBoost
 # (0) CI_one + no RevIN + sl96: val_mse: 0.6697, test_mse: 0.3758, test_mae: 0.3903 yes
 # (0) CI_one + no RevIN + sl336: val_mse: 0.6795, test_mse: 0.3711, test_mae: 0.3909 yes
@@ -45,7 +47,7 @@ python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ET
 # (2) CI_one + only RevIN + sl336 + x_mark: val_mse: 0.2156; test_mse: 0.2861, test_mae: 0.3392 yes
 # (2) CI_one + only RevIN + sl96 + top-3 FFT : train_mse: 0.3083, val_mse: 0.2211; test_mse: 0.2838, test_mae: 0.3357 yes
 # (2) CI_one + only RevIN + sl336 + top-3 FFT : train_mse: 0.3024, val_mse: 0.2180; test_mse: 0.2798, test_mae: 0.3380 yes
-python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ETTh2.csv --task_id ETTh2 --model gbdt --data ETTh2 --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 7 --dec_in 7 --c_out 7 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin
+python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ETTh2.csv --task_id ETTh2 --model gbdt --data ETTh2 --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 7 --dec_in 7 --c_out 7 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin --channel_strategy CI_one
 
 
 # 3.ETTm1 + pl96
@@ -61,7 +63,7 @@ python -u run.py --is_training 1 --root_path ./dataset/ETT-small/ --data_path ET
 # Linear: test_mse: 0.410, test_mae: 0.279
 # PatchTST: test_mse: 0.360, test_mae: 0.249
 # 6.3 XGBoost
-python -u run.py --is_training 1 --root_path ./dataset/traffic/ --data_path traffic.csv --task_id trafic --model gbdt --data custom --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 862 --dec_in 862 --c_out 862 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin
+python -u run.py --is_training 1 --root_path ./dataset/traffic/ --data_path traffic.csv --task_id trafic --model gbdt --data custom --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 862 --dec_in 862 --c_out 862 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin --channel_strategy CI_one
 
 
 # 7. Exchange + pl=96
@@ -75,7 +77,7 @@ python -u run.py --is_training 1 --root_path ./dataset/traffic/ --data_path traf
 # (2) CI_one + only RevIN + sl336 + x_mark: train_mse: 0.1134, val_mse: 0.1260, test_mse: 0.0887, test_mae: 0.2093 yes (x_mark没什么用)
 # (2) CI_one + only RevIN + sl96 + mean_std: train_mse: 0.1334, val_mse: 0.1527, test_mse: 0.1186, test_mae: 0.2497 yes
 # (2) CI_one + only RevIN + sl336 + mean_std: train_mse: 0.1197, val_mse: 0.1705, test_mse: 0.1244, test_mae: 0.2626 yes
-python -u run.py --is_training 1 --root_path ./dataset/exchange_rate/ --data_path exchange_rate.csv --task_id exchange --model gbdt --data custom --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 8 --dec_in 8 --c_out 8 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin
+python -u run.py --is_training 1 --root_path ./dataset/exchange_rate/ --data_path exchange_rate.csv --task_id exchange --model gbdt --data custom --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 8 --dec_in 8 --c_out 8 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin --channel_strategy CI_one
 
 
 
@@ -91,7 +93,7 @@ python -u run.py --is_training 1 --root_path ./dataset/exchange_rate/ --data_pat
 # (2) CI_one + only RevIN + sl336 + x_mark: train_mse: 0.4134, val_mse: 0.4117, test_mse: 0.1619, test_mae: 0.2082 yes
 # (2) CI_one + only RevIN + sl96 + mean_std: train_mse: 0.1334, val_mse: 0.1527, test_mse: 0.1186, test_mae: 0.2497 no
 # (2) CI_one + only RevIN + sl336 + mean_std: train_mse: 0.1197, val_mse: 0.1705, test_mse: 0.1244, test_mae: 0.2626 no
-python -u run.py --is_training 1 --root_path ./dataset/weather/ --data_path weather.csv --task_id weather --model gbdt --data custom --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 21 --dec_in 21 --c_out 21 --des 'Exp' --itr 1 --gpu 0 --run_train --add_revin
+python -u run.py --is_training 1 --root_path ./dataset/weather/ --data_path weather.csv --task_id weather --model gbdt --data custom --features M --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_layers 1 --factor 3 --enc_in 21 --dec_in 21 --c_out 21 --des 'Exp' --itr 1 --gpu 0 --run_train --add_revin --channel_strategy CI_one
 
 
 # 9.1 Illness + pl=24
@@ -127,7 +129,7 @@ python -u run.py --is_training 1 --root_path ./dataset/weather/ --data_path weat
 # (6) CI_one + only RevIN + sl80 + top-3 FFT : train_mse: 0.1116, val_mse: 0.2265, test_mse: 1.8509, test_mae: 0.8162 yes  # 也是重要性很高，但是泛化效果不好，过拟合了
 # (6) CI_one + only RevIN + sl104 + top-1 FFT : train_mse: 0.1749, val_mse: 0.2671, test_mse: 1.6489, test_mae: 0.7891 yes  # 也是重要性很高，但是泛化效果不好，过拟合了
 # (6) CI_one + only RevIN + sl104 + top-3 FFT : train_mse: 0.1577, val_mse: 0.2623, test_mse: 1.8707, test_mae: 0.8243 yes  # 也是重要性很高，但是泛化效果不好，过拟合了
-python -u run.py --is_training 1 --root_path ./dataset/illness/ --data_path national_illness.csv --task_id ili --model gbdt --data custom --features M --seq_len 36 --label_len 18 --pred_len 24 --e_layers 2 --d_layers 1 --factor 3 --enc_in 7 --dec_in 7 --c_out 7 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin
+python -u run.py --is_training 1 --root_path ./dataset/illness/ --data_path national_illness.csv --task_id ili --model gbdt --data custom --features M --seq_len 36 --label_len 18 --pred_len 24 --e_layers 2 --d_layers 1 --factor 3 --enc_in 7 --dec_in 7 --c_out 7 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin --channel_strategy CI_one
 
 # 9.2 Illness + pl=60
 # Linear: test_mse: 1.819, test_mae: 0.917
@@ -138,5 +140,5 @@ python -u run.py --is_training 1 --root_path ./dataset/illness/ --data_path nati
 # (1) CI_one + only RevIN + sl104: val_mse: 0.2612, test_mse: 1.7984, test_mae: 0.8965 yes
 # (2) CI_one + only RevIN + sl36 + x_mark: val_mse: 0.2372, test_mse: 1.5518, test_mae: 0.7925 yes
 # (2) CI_one + only RevIN + sl104 + x_mark: val_mse: 0.2612, test_mse: 1.7981, test_mae: 0.8964 yes
-python -u run.py --is_training 1 --root_path ./dataset/illness/ --data_path national_illness.csv --task_id ili --model gbdt --data custom --features M --seq_len 52 --label_len 18 --pred_len 60 --e_layers 2 --d_layers 1 --factor 3 --enc_in 7 --dec_in 7 --c_out 7 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin
+python -u run.py --is_training 1 --root_path ./dataset/illness/ --data_path national_illness.csv --task_id ili --model gbdt --data custom --features M --seq_len 52 --label_len 18 --pred_len 60 --e_layers 2 --d_layers 1 --factor 3 --enc_in 7 --dec_in 7 --c_out 7 --des 'Exp' --d_model 512 --itr 1  --gpu 0 --run_train --add_revin --channel_strategy CI_one
 
